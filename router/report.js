@@ -21,6 +21,9 @@ import { getTJKNReport, getTJKNDetail } from "../controllers/Report/tjknReportCo
 import {
   getPerformanceEmployee, savePerformanceEmployee, getEmployeeList,
 } from "../controllers/Report/performanceEmployeeController.js";
+import {
+  getTemuanReport, getJudulTemuan, getBusinessUnits as getBusinessUnitsReport, getDivisionsByBU as getDivisionsByBUReport
+} from "../controllers/Report/temuanController.js";
 
 const router = express.Router();
 
@@ -82,5 +85,11 @@ router.get('/getTJKNDetail', getTJKNDetail);
 router.get('/getPerformanceEmployee', getPerformanceEmployee);
 router.post('/savePerformanceEmployee', savePerformanceEmployee);
 router.get('/getEmployeeListPerf', getEmployeeList);
+
+// Temuan Report routes
+router.get('/getTemuanReport', getTemuanReport);
+router.get('/getJudulTemuan', getJudulTemuan);
+router.get('/getBusinessUnitsReport', getBusinessUnitsReport);
+router.get('/getDivisionsByBUReport', getDivisionsByBUReport);
 
 export default router;

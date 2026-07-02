@@ -127,5 +127,6 @@ file/
 
 test/
 /migrations
-/uploads/permintaan/kembali
+uploads/temp/*
+!uploads/temp/.gitkeep
 /docs

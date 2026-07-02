@@ -21,6 +21,7 @@ import {
   confirmClosingRequest,
   reopenRequest,
   getFeedbackData,
+  getAllFeedbackByRequest,
   submitFeedback,
   confirmClosingItem
 } from '../controllers/Transaction/confirmClosingController.js';
@@ -83,6 +84,7 @@ router.post('/reopenRequest/:temuan_id', reopenRequest);
 
 // Feedback Routes
 router.get('/getFeedbackData/:listdet_id', getFeedbackData);
+router.get('/getAllFeedbackByRequest/:temuan_id', getAllFeedbackByRequest);
 router.post('/submitFeedback', upload.any(), submitFeedback);
 router.post('/confirmClosingItem', upload.any(), confirmClosingItem);
 
