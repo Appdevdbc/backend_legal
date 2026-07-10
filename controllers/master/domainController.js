@@ -21,7 +21,7 @@ dotenv.config();
       const baseQuery = dbDMS("v_mstr_bu")
       if (!rowsPerPage) {
         const response = await baseQuery
-        .select('bu_id', 'bu_name', 'bu_prefix')
+        .select('bu_id', 'bu_name', 'bu_status')
         .orderBy("bu_id");
         return res.status(200).json(response);
       }
@@ -32,7 +32,7 @@ dotenv.config();
       const perPage = Math.floor(rowsPerPage);
 
       let query = baseQuery
-      .select("bu_id", "bu_name", "bu_prefix")
+      .select("bu_id", "bu_name", "bu_status")
       
       // Apply filter if provided
       if (filter) {
@@ -40,7 +40,7 @@ dotenv.config();
           subQuery
             .orWhere('bu_id', 'like', `%${filter}%`)
             .orWhere('bu_name', 'like', `%${filter}%`)
-            .orWhere('bu_prefix', 'like', `%${filter}%`)
+            .orWhere('bu_status', 'like', `%${filter}%`)
         });
       }
       
@@ -689,30 +689,68 @@ export const getRoleAksesByPage = async (req, res) => {
     const { role: encryptedEmpid, page, domain } = req.query;
     const empid = decrypt(encryptedEmpid);
     
+    // console.log('=== DEBUG pageakses ===');
+    // console.log('Encrypted empid:', encryptedEmpid);
+    // console.log('Decrypted empid:', empid);
+    // console.log('Page:', page);
+    // console.log('Domain:', domain);
+    
     // Get user's groups for this domain
-    const userGroups = await dbDMS('user_group')
-      .select('ugrp_group_id', 'g.grp_name', 'g.grp_code')
-      .join('group_aplikasi as g', 'ugrp_group_id', 'g.grp_id')
+    const userGroups = await dbDMS('master_user')
+      .select('account_type as ugrp_group_id')
       .where({
-        'ugrp_user_id': empid,
-        'ugrp_bu_id': domain
-      })
-      .whereNull('user_group.deleted_at');
+        'emp_id': empid
+      });
+    
+    // console.log('User groups found:', userGroups);
     
     if (userGroups.length === 0) {
       return res.status(404).json({
         type: 'error',
-        message: 'Access data not found'
+        message: 'User not found or has no groups assigned'
       });
     }
     
     const groupIds = userGroups.map(g => g.ugrp_group_id);
+    // console.log('Group IDs:', groupIds);
+    
+    // Check if menu exists
+    const menuExists = await dbDMS('mst_menu')
+      .where('menu_link', page)
+      .whereNull('deleted_at')
+      .first();
+    
+    // console.log('Menu exists:', menuExists);
+    
+    if (!menuExists) {
+      return res.status(404).json({
+        type: 'error',
+        message: `Menu with link '${page}' not found in mst_menu table`
+      });
+    }
+    
+    // Check if menu_access exists for these groups
+    const accessExists = await dbDMS('menu_access')
+      .whereIn("maccess_group_id", groupIds)
+      .where('maccess_menuid', menuExists.menu_id)
+      .whereNull('deleted_at')
+      .first();
+    
+    // console.log('Access exists:', accessExists);
+    
+    if (!accessExists) {
+      return res.status(404).json({
+        type: 'error',
+        message: `No menu_access found for groups [${groupIds.join(', ')}] to menu '${page}' (menu_id: ${menuExists.menu_id})`
+      });
+    }
     
     // Check if user is admin (has ADMIN group or group name contains Admin)
-    const isAdmin = userGroups.some(g => 
-      g.grp_code === 'ADMIN' || 
-      g.grp_name.toLowerCase().includes('admin')
-    );
+    // const isAdmin = userGroups.some(g => 
+    //   g.grp_code === 'ADMIN' || 
+    //   g.grp_name.toLowerCase().includes('admin')
+    // );
+    const isAdmin = false; // Default to false for now
     
     // Get menu access for this page
     const response = await dbDMS('menu_access')
@@ -723,10 +761,12 @@ export const getRoleAksesByPage = async (req, res) => {
       .whereNull('mst_menu.deleted_at')
       .first();
     
+    console.log('Final response:', response);
+    
     if (!response) {
       return res.status(404).json({
         type: 'error',
-        message: 'Access data not found'
+        message: 'Access data not found after all checks - this should not happen'
       });
     }
     
@@ -739,6 +779,9 @@ export const getRoleAksesByPage = async (req, res) => {
       admin: await encrypt(isAdmin ? '1' : '0'),
       folder_scope: await encrypt('All') // Default folder scope
     };
+    
+    console.log('Returning data:', data);
+    console.log('=== END DEBUG ===');
     
     res.status(200).json(data);
   } catch (error) {
