@@ -768,7 +768,8 @@ export const saveUserData = async (req, res) => {
   try {
     const { nik, account_name, account_email, emp_id, account_active, creator, role_id } = req.body;
     const creator_decrypt = decrypt(creator);
-    const empid_decrypt = decrypt(emp_id);
+    // const empid_decrypt = decrypt(emp_id);
+    const empid_decrypt = emp_id;
     const now = dayjs().format("YYYY-MM-DD HH:mm:ss");
 
     // Check if user already exists by NIK
