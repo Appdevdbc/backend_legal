@@ -664,7 +664,7 @@ export const confirmClosingItem = async (req, res) => {
     const result = await trx('list_det')
       .count('* as total')
       .where('listdet_id', 'like', `${listdet_id.replace(/-[^-]*$/, "")}%`)
-      .where('listdet_progress', 0)
+      .where('listdet_progress', '0')
       .first();
 
     if (result.total === 0) {
