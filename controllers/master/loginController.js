@@ -182,7 +182,7 @@ export const login_portal = async (req, res) => {
   // #swagger.description = 'Fungsi untuk validasi login via portal'
  try {
     let users = await db("users")
-   .select("user_id","user_nik","user_name","user_domain","user_site","user_role")
+   .select("user_id","user_nik","user_name","user_domain","user_site")
    .where ('user_id',req.body.nik)
    .first();
    //return res.status(200).json(users);
@@ -192,6 +192,12 @@ export const login_portal = async (req, res) => {
       message: `User belum terdaftar pada aplikasi ini`,
     });
    }
+
+   const activeGrant = await db("user_grant_role")
+     .where("grant_user_id", users.user_id)
+     .whereNull("deleted_at")
+     .first();
+   const userRole = activeGrant ? String(activeGrant.grant_urole_id) : "";
    
    let hris = await dbHris("portal.dbo.ptl_hris")
    .select("Emp_Id","user_pass",'user_newid','grade','jabatan')
@@ -228,10 +234,10 @@ export const login_portal = async (req, res) => {
      'user_jabatan':jabatan
    });
   
-   let unit = await db("domain")
-   .select("domain_shortname")
-   .where ('domain_code',users.user_domain)
-   .first();
+    let unit = await db("mst_domain")
+    .select("domain_shortname")
+    .where ('domain_code',users.user_domain)
+    .first();
 
    const resPortal = await dbHris("ptl_policy").where("id", 0).first();
    let token = jwt.sign({ user: users.user_id }, process.env.TOKEN, {
@@ -255,7 +261,7 @@ export const login_portal = async (req, res) => {
       nik:users.user_nik,
       site:users.user_site,
       token: token,
-      role:encrypt(users.user_role || ''),
+      role:encrypt(userRole),
       idle: resPortal.idle_time,
     },
   });
