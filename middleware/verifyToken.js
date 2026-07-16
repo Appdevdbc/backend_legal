@@ -9,8 +9,8 @@ const PUBLIC_ROUTES = [
   { method: 'POST', path: '/wjs/auth/login' },
   { method: 'POST', path: '/login_portal' },
   { method: 'POST', path: '/refresh_token' },
-  { method: 'GET', path: '/api/v1/roles' },
-  { method: 'POST', path: '/api/v1/sync-users' }
+  { method: 'GET', path: '/v1/roles' },
+  { method: 'POST', path: '/v1/sync-users' }
 ];
 
 /**

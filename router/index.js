@@ -62,7 +62,7 @@ router.use('/wjs',wjsRouter)
 router.use('/wjs/auth',authRouter)
 router.use('/',spkRouter)
 router.use('/',reportRouter)
-router.use('/api/v1',syncRouter)
+router.use('/v1',syncRouter)
 router.use('/transaction',transactionRouter)
 
 
