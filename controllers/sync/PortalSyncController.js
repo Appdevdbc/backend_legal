@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { db } from "../../config/db.js";
+import { db, dbHris } from "../../config/db.js";
 import { logger } from "../../helpers/logger.js";
 import { getErrorResponse } from "../../helpers/utils.js";
 
@@ -73,11 +73,22 @@ export const syncUsers = async (req, res) => {
       // Upsert user in users table
       let user = await db("users").where("user_id", empId).first();
       if (!user) {
+        const hris = await dbHris("ptl_hris")
+          .select("user_email", "bu_id")
+          .where("Emp_Id", empId)
+          .where("user_active", "Active")
+          .first();
+
+        const email = userData.employee_email ?? hris?.user_email ?? null;
+        const domainCode = hris?.bu_id ?? "";
+
         await db("users").insert({
           user_id:      empId,
           user_nik:     userData.employee_nik ?? empId,
           user_name:    userData.employee_name ?? "",
-          user_email:   userData.employee_email ?? null,
+          user_email:   email,
+          user_domain:  domainCode,
+          user_site:    domainCode ? (domainCode + "11") : "",
           user_active:  "Active",
           created_by:   "system",
           created_at:   dayjs().format("YYYY-MM-DD HH:mm:ss"),
