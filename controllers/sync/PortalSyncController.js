@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { db, dbHris } from "../../config/db.js";
+import { db, dbHris, dbDMS } from "../../config/db.js";
 import { logger } from "../../helpers/logger.js";
 import { getErrorResponse } from "../../helpers/utils.js";
 
@@ -128,6 +128,9 @@ export const syncUsers = async (req, res) => {
         } else {
           action = "SKIP";
         }
+
+        // Also remove from dbDMS master_user table
+        await dbDMS("master_user").where("emp_id", empId).delete();
       } else {
         if (user.user_active !== "Active") {
           await db("users").where("user_id", empId).update({
@@ -160,6 +163,37 @@ export const syncUsers = async (req, res) => {
         } else {
           action = "SKIP";
         }
+
+        // Also upsert in dbDMS master_user table
+        const domainCode = user.user_domain || "";
+        const existingMasterUser = await dbDMS("master_user")
+          .where("emp_id", empId)
+          .first();
+
+        if (existingMasterUser) {
+          await dbDMS("master_user")
+            .where("emp_id", empId)
+            .update({
+              account_nik:      userData.employee_nik ?? existingMasterUser.account_nik ?? empId,
+              account_username: userData.employee_nik ?? existingMasterUser.account_username ?? empId,
+              account_bu:       domainCode || existingMasterUser.account_bu,
+              account_type:     String(roleId),
+              updated_by:       "system",
+              updated_at:       dayjs().format("YYYY-MM-DD HH:mm:ss")
+            });
+        } else {
+          await dbDMS("master_user").insert({
+            account_nik:      userData.employee_nik ?? empId,
+            account_username: userData.employee_nik ?? empId,
+            emp_id:           empId,
+            account_bu:       domainCode,
+            account_type:     String(roleId),
+            created_by:       "system",
+            created_at:       dayjs().format("YYYY-MM-DD HH:mm:ss"),
+            updated_by:       "system",
+            updated_at:       dayjs().format("YYYY-MM-DD HH:mm:ss")
+          });
+        }
       }
 
       results.push(buildResult(appsId, syncType, triggeredBy, startedAt, userData, "SUCCESS", null, action, oldRole, oldIsActive, isActive));
@@ -185,6 +219,10 @@ export const syncUsers = async (req, res) => {
         updated_by: "system",
         updated_at: dayjs().format("YYYY-MM-DD HH:mm:ss")
       });
+
+    await dbDMS("master_user")
+      .whereNotIn("emp_id", processedEmpIds)
+      .delete();
   }
 
   const endedAt   = dayjs();
