@@ -25,13 +25,12 @@ export const validateSyncKey = (req, res, next) => {
 // ─── GET /api/v1/roles ────────────────────────────────────────────────────────
 export const getRoles = async (req, res) => {
   try {
-    const roles = await db("user_role")
-      .select("urole_id as role_id", "urole_desc as role_name")
-      .whereNull("deleted_at");
+    const roles = await dbDMS("master_role")
+      .select("role_id", "role_name");
 
     return res.status(200).json(
       roles.map((r) => ({
-        role_id: r.role_id,
+        role_id: String(r.role_id),
         role_name: r.role_name,
         is_active: true,
       }))
