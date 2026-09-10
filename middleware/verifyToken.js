@@ -8,7 +8,9 @@ const PUBLIC_ROUTES = [
   { method: 'POST', path: '/login' },
   { method: 'POST', path: '/wjs/auth/login' },
   { method: 'POST', path: '/login_portal' },
-  { method: 'POST', path: '/refresh_token' }
+  { method: 'POST', path: '/refresh_token' },
+  { method: 'GET', path: '/v1/roles' },
+  { method: 'POST', path: '/v1/sync-users' }
 ];
 
 /**
@@ -20,6 +22,43 @@ const isPublicRoute = (method, path) => {
   );
 };
 
+/**
+ * Pure function to resolve the auth token from a request's parts.
+ * Priority:
+ *   1. httpOnly cookie (COOKIE_NAME)          -> utama
+ *   2. query.token when SSE (text/event-stream)
+ *   3. Authorization: Bearer <token>          -> backward compatible
+ *
+ * @param {Object} parts
+ * @param {Object} [parts.cookies]        req.cookies
+ * @param {string} [parts.accept]         req.headers['accept']
+ * @param {string} [parts.authorization]  req.headers.authorization
+ * @param {Object} [parts.query]          req.query
+ * @returns {string|null} the token, or null if none present
+ */
+export const resolveToken = ({ cookies, accept, authorization, query } = {}) => {
+  const cookieName = process.env.COOKIE_NAME || 'token';
+
+  // 1. httpOnly cookie (utama)
+  const cookieToken = cookies?.[cookieName];
+  if (cookieToken) return cookieToken;
+
+  // 2. SSE: token dari query
+  if (accept === 'text/event-stream' && query?.token) {
+    return query.token;
+  }
+
+  // 3. Authorization header: Bearer <token> (backward compatible)
+  if (authorization) {
+    const parts = authorization.split(' ');
+    if (parts.length === 2 && /^Bearer$/i.test(parts[0]) && parts[1]) {
+      return parts[1];
+    }
+  }
+
+  return null;
+};
+
   
 export const cekToken = async (req, res, next) => {  
   try {  
@@ -28,14 +67,13 @@ export const cekToken = async (req, res, next) => {
       return next();  
     }
     
-    // Protected route - verify token
-    let token;  
-
-    if (req.headers['accept'] === 'text/event-stream') {   
-      token = req.query.token;
-    } else {  
-      token = req.headers.authorization?.split(' ')[1];  
-    }  
+    // Protected route - resolve token (cookie > SSE query > Bearer)
+    const token = resolveToken({
+      cookies: req.cookies,
+      accept: req.headers['accept'],
+      authorization: req.headers.authorization,
+      query: req.query,
+    });
 
     if (!token) return res.status(401).json({ message: "Invalid Token" });
 

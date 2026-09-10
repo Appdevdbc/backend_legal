@@ -682,42 +682,68 @@ export const listCollectionMenu = async (req, res) => {
   // #swagger.description = 'Menampilkan data collection'
   try {
     
-    const { role: encryptedRole, data,empid:empidDecrypt,domain } = req.query;
+    const { role: encryptedRole, data: dataEncrypt, empid: empidEncrypt, domain } = req.query;
     
-    const empid =  decrypt(empidDecrypt);
+    // console.log('=== DEBUG getCollectionMenu ===');
+    // console.log('Raw dataEncrypt:', dataEncrypt);
+    // console.log('Raw empidEncrypt:', empidEncrypt);
+    // console.log('Domain:', domain);
     
-    // Get user's groups using new user_group table
-    // const userGroups = await dbDMS('user_group')
-    //   .select('ugrp_group_id')
-    //   .where({'ugrp_user_id':empid,'ugrp_bu_id':domain})
-    //   .whereNull('deleted_at');
-
+    // Decrypt empid
+    const empid = decrypt(empidEncrypt);
+    // console.log('Decrypted empid:', empid);
+    
+    // Decode data from Base64 (URL-encoded Base64)
+    // First decode URL encoding (%3D -> =), then decode Base64
+    const dataDecoded = decodeURIComponent(dataEncrypt);
+    // console.log('URL decoded data:', dataDecoded);
+    
+    const data = atob(dataDecoded);
+    // console.log('Base64 decoded data:', data);
+    
+    // Get user's groups using master_user table
     const userGroups = await dbDMS('master_user')
       .select('account_type')
-      .where({'emp_id':empid});
+      .where({'emp_id': empid});
+    
+    // console.log('User groups:', userGroups);
       
-    if(userGroups.length === 0) return res.status(200).json([]);
+    if (userGroups.length === 0) {
+      // console.log('No user groups found, returning empty array');
+      return res.status(200).json([]);
+    }
     
     const groupIds = userGroups.map(g => g.account_type);
+    // console.log('Group IDs:', groupIds);
+    
+    // Decode the collection link for query
+    const collectionLink = data; // This should be something like '/collection/legal-master-data'
+    // console.log('Collection link to query:', collectionLink);
     
     const dtMenu = await dbDMS("collection_det")
       .distinct('mst_menu.*')
       .innerJoin('collection_menu', 'coldet_colid', 'colid')
       .innerJoin('mst_menu', 'mst_menu.menu_id', 'coldet_menu')
       .innerJoin("menu_access", 'maccess_menuid', 'coldet_menu')
-      .where("col_link", atob(data))
+      .where("col_link", collectionLink)
+      .where("maccess_view", 1)
       .whereIn("maccess_group_id", groupIds)
       .whereNull('mst_menu.deleted_at')
       .orderBy('menu_name', 'asc');
+    
+    // console.log('Menu items found:', dtMenu.length);
     
     // Add random color to each menu item
     dtMenu.forEach(item => {
       item.color = getRandomDarkColor();
     });
     
+    // console.log('=== END DEBUG ===');
+    
     return res.json(dtMenu);
       
   } catch (error) {
+    console.error('Error in listCollectionMenu:', error);
     logger(error, 'GET /listCollectionMenu', req.query);
     return res.status(406).json(getErrorResponse(error));
   }

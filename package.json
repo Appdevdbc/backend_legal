@@ -20,6 +20,7 @@
     "basic-ftp": "^5.0.2",
     "body-parser": "^1.20.1",
     "bwip-js": "4.5.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dayjs": "^1.11.6",
     "dotenv": "^16.0.3",

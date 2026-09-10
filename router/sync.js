@@ -1,9 +1,9 @@
 import express from "express";
-import { getRoles, syncUsers, validateApiKey } from "../controllers/sync/PortalSyncController.js";
+import { getRoles, syncUsers, validateRoleKey, validateSyncKey } from "../controllers/sync/PortalSyncController.js";
 
 const router = express.Router();
 
-router.get("/roles",      validateApiKey("API_KEY_ROLE"), getRoles);
-router.post("/sync-users", validateApiKey("API_KEY_SYNC"), syncUsers);
+router.get("/roles",      validateRoleKey, getRoles);
+router.post("/sync-users", validateSyncKey, syncUsers);
 
 export default router;
