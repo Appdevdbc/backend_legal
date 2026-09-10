@@ -10,6 +10,23 @@ import { createUserResponse, logAccess } from "../../helpers/master/login.js";
 
 dotenv.config();
 
+const COOKIE_NAME = process.env.COOKIE_NAME || 'token';
+
+/**
+ * Bangun opsi cookie auth httpOnly.
+ * @param {number} [maxAge] - umur cookie (ms). Dihilangkan untuk clearCookie.
+ */
+const buildCookieOptions = (maxAge) => {
+  const options = {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.ENVIRONMENT === 'PRODUCTION',
+    path: '/',
+  };
+  if (maxAge != null) options.maxAge = maxAge;
+  return options;
+};
+
 
 export const login = async (req, res) => {
   // #swagger.tags = ['User']
@@ -74,7 +91,8 @@ export const login = async (req, res) => {
     const results = await Promise.all(updatePromises);
     const resPortal = results[results.length - 1]; // Last result is always ptl_policy
 
-    const token = jwt.sign({user: hris.Emp_Id}, process.env.TOKEN, {expiresIn: resPortal?.idle_time || 3600000});
+    const idleTime = resPortal?.idle_time || 3600000;
+    const token = jwt.sign({user: hris.Emp_Id}, process.env.TOKEN, {expiresIn: idleTime});
     
     // Log access
     await dbDMS("log_akses").insert({
@@ -84,8 +102,11 @@ export const login = async (req, res) => {
       keterangan: "user",
       nama_url: url || '/wjs',
     });
+
+    // Set token sebagai httpOnly cookie (TIDAK dikembalikan di body)
+    res.cookie(COOKIE_NAME, token, buildCookieOptions(idleTime));
     
-    // Return response with portal organizational data
+    // Return response with portal organizational data (TANPA token)
     res.status(200).json({
       message: "success",
       data: {
@@ -104,8 +125,7 @@ export const login = async (req, res) => {
         dir_name: direktorat?.direktorat_name,
         role: encrypt('0'),
         super: encrypt('0'),
-        token: token,
-        idle: process.env.ENVIRONMENT === 'PRODUCTION' ? (resPortal?.idle_time || 3600000) : 3600000,
+        idle: process.env.ENVIRONMENT === 'PRODUCTION' ? idleTime : 3600000,
       },
     });
   } catch (error) {
@@ -126,11 +146,13 @@ export const refresh_token = async (req, res) => {
       .first();
 
     const resPortal = await dbHris("ptl_policy").where("id", 0).first();
+    const idleTime = resPortal.idle_time;
     let token = jwt.sign({ user: response.user_id }, process.env.TOKEN, {
-      expiresIn: resPortal.idle_time,
+      expiresIn: idleTime,
     });
-    //pakai .toSQL().toNative() untuk mengecek query dalam format sql
-    res.status(200).json({ token: token });
+    // Set token baru sebagai httpOnly cookie (TIDAK dikembalikan di body)
+    res.cookie(COOKIE_NAME, token, buildCookieOptions(idleTime));
+    res.status(200).json({ message: "success" });
   } catch (error) {
     logger(error, 'POST /refresh_token', req.body);
     return res.status(406).json({
@@ -164,6 +186,9 @@ export const logout = async (req, res) => {
         nama_url: url,
       });
     }
+
+    // Hapus cookie auth (opsi sama tanpa maxAge)
+    res.clearCookie(COOKIE_NAME, buildCookieOptions());
     
     return res.json("sukses");
   }catch (error) {
@@ -234,8 +259,9 @@ export const login_portal = async (req, res) => {
    .first();
 
    const resPortal = await dbHris("ptl_policy").where("id", 0).first();
+   const idleTime = resPortal.idle_time;
    let token = jwt.sign({ user: users.user_id }, process.env.TOKEN, {
-     expiresIn: resPortal.idle_time,
+     expiresIn: idleTime,
    });
   
    await dbDMS("log_akses").insert({
@@ -245,6 +271,10 @@ export const login_portal = async (req, res) => {
     keterangan: "user",
     nama_url:req.body.url,
   });
+
+  // Set token sebagai httpOnly cookie (TIDAK dikembalikan di body)
+  res.cookie(COOKIE_NAME, token, buildCookieOptions(idleTime));
+
   res.status(200).json({
     message: "success",
     data: {
@@ -254,9 +284,8 @@ export const login_portal = async (req, res) => {
       domain: users.user_domain,
       nik:users.user_nik,
       site:users.user_site,
-      token: token,
       role:encrypt(users.user_role || ''),
-      idle: resPortal.idle_time,
+      idle: idleTime,
     },
   });
    
