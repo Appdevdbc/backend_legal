@@ -1,10 +1,36 @@
 import { dbHris, dbWJS } from '../../config/db.js';
 import { getErrorResponse, mySimpleCrypt } from '../../helpers/utils.js';
 import { logger } from '../../helpers/logger.js';
+import { resolveToken } from '../../middleware/verifyToken.js';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
+const COOKIE_NAME = process.env.COOKIE_NAME || 'token';
+
+/**
+ * Bangun opsi cookie auth httpOnly.
+ * @param {number} [maxAge] - umur cookie (ms). Dihilangkan untuk clearCookie.
+ */
+const buildCookieOptions = (maxAge) => {
+  const options = {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.ENVIRONMENT === 'PRODUCTION',
+    path: '/',
+  };
+  if (maxAge != null) options.maxAge = maxAge;
+  return options;
+};
+
+/** Ambil token dari request (cookie > SSE query > Bearer). */
+const getRequestToken = (req) => resolveToken({
+  cookies: req.cookies,
+  accept: req.headers['accept'],
+  authorization: req.headers.authorization,
+  query: req.query,
+});
 
 /**
  * Login - Authenticate user with NIK and password
@@ -120,12 +146,14 @@ export const login = async (req, res) => {
       nama_url: req.body.url || '/wjs'
     });
 
-    // Return success response
+    // Set token sebagai httpOnly cookie (TIDAK dikembalikan di body)
+    res.cookie(COOKIE_NAME, token, buildCookieOptions(idleTime));
+
+    // Return success response (TANPA token)
     res.status(200).json({
       success: true,
       message: 'Login berhasil',
       data: {
-        token,
         user: {
           id: portalUser.Emp_Id,
           nik: user.account_nik,
@@ -159,7 +187,10 @@ export const login = async (req, res) => {
  */
 export const logout = async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
+    const token = getRequestToken(req);
+    // Selalu hapus cookie, walau token tidak ada
+    res.clearCookie(COOKIE_NAME, buildCookieOptions());
+
     if (!token) {
       return res.status(200).json({ success: true, message: 'Logged out' });
     }
@@ -202,7 +233,7 @@ export const logout = async (req, res) => {
  */
 export const verify = async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
+    const token = getRequestToken(req);
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -242,7 +273,7 @@ export const verify = async (req, res) => {
  */
 export const getCurrentUser = async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
+    const token = getRequestToken(req);
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -307,7 +338,7 @@ export const getCurrentUser = async (req, res) => {
  */
 export const refreshToken = async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
+    const token = getRequestToken(req);
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -343,11 +374,12 @@ export const refreshToken = async (req, res) => {
       { expiresIn: idleTime }
     );
 
+    // Set token baru sebagai httpOnly cookie (TIDAK dikembalikan di body)
+    res.cookie(COOKIE_NAME, newToken, buildCookieOptions(idleTime));
+
     res.status(200).json({
       success: true,
-      data: {
-        token: newToken
-      }
+      message: 'Token diperbarui'
     });
   } catch (error) {
     logger(error, 'POST /wjs/auth/refresh', {});
